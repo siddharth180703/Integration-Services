@@ -29,11 +29,11 @@ public class AuthController {
         if (userRepo.findByUsername(req.getUsername()).isPresent()) {
             throw new RuntimeException("Username exists");
         }
-
+        String selectedRole = req.getRole();
         AppUser user = AppUser.builder()
                 .username(req.getUsername())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .roles(Set.of("ROLE_USER"))
+                .roles(Set.of(selectedRole))
                 .build();
 
         userRepo.save(user);
