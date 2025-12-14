@@ -2,23 +2,25 @@ package com.example.demo.Security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserDetailsServiceImpl userDetailsService;
 
     @Override
     protected void doFilterInternal(
@@ -27,44 +29,50 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        System.out.println("--- Processing Request: " + request.getRequestURI() + " ---");
+
         String token = null;
 
-        // Read token from Cookie
         if (request.getCookies() != null) {
-            for (Cookie c : request.getCookies()) {
-                if (c.getName().equals("jwt")) {
-                    token = c.getValue();
+            for (Cookie cookie : request.getCookies()) {
+                if ("accessToken".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    System.out.println("1. Cookie found! Token: " + token);
                 }
             }
+        } else {
+            System.out.println("1. No cookies found in request.");
         }
 
-        if (token == null) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+        if (token != null) {
+            try {
+                String username = jwtService.extractUsername(token);
+                String role = jwtService.extractRole(token);
 
-        String username = null;
+                System.out.println("2. Extracted Username: " + username);
+                System.out.println("3. Extracted Role: " + role);
 
-        try {
-            username = jwtService.extractUsername(token);
-        } catch (Exception e) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    // Construct the authorities carefully
+                    List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
 
-            User userDetails = (User) userDetailsService.loadUserByUsername(username);
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    username,
+                                    null,
+                                    authorities
+                            );
 
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
-                    );
-
-            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    System.out.println("4. Authentication set in SecurityContext for: " + username);
+                }
+            } catch (Exception e) {
+                System.out.println("Error validating token: " + e.getMessage());
+                e.printStackTrace(); // This will print the actual error if the token is wrong
+            }
+        } else {
+            System.out.println("Token was null, skipping authentication.");
         }
 
         filterChain.doFilter(request, response);

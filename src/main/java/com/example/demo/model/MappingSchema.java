@@ -30,11 +30,11 @@ public class MappingSchema {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, String> requestMapping= new HashMap<>();
+    private Map<String, Object> requestMapping= new HashMap<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Map<String, String> responseMapping= new HashMap<>();
+    private Map<String, Object> responseMapping= new HashMap<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

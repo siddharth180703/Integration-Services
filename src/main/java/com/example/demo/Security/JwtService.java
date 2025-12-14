@@ -1,43 +1,47 @@
 package com.example.demo.Security;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
 import java.util.Date;
-import java.util.Map;
 
 @Service
 public class JwtService {
 
-    // Use a strong secret in production and store it safely (env variable)
     private static final String SECRET_KEY =
-            "thisIsA256BitLongSecretKeyThisIsA256BitLongSecretKey";
+            "thisIsA256BitLongSecretKeyThisIsA256BitLongSecretKey"; // In production, use environment variables
 
-    private Key getSigningKey() {
+    private Key getKey() {
         return Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
     }
 
-    public String generateToken(String username, Map<String, Object> claims) {
+    public String generateToken(String username, String role) {
         return Jwts.builder()
-                .setClaims(claims)
                 .setSubject(username)
+                .claim("role", role)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24)) // 24h
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .setExpiration(new Date(System.currentTimeMillis() + 86400000)) // 1 day
+                .signWith(getKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    public Claims extractAllClaims(String token) {
+    public String extractUsername(String token) {
+        return getClaims(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        return getClaims(token).get("role", String.class);
+    }
+
+    private Claims getClaims(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+                .setSigningKey(getKey())
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
-    }
-
-    public String extractUsername(String token) {
-        return extractAllClaims(token).getSubject();
     }
 }
