@@ -35,7 +35,7 @@ public class AuthController {
         AppUser user = AppUser.builder()
                 .username(request.getUsername())
                 .password(encodedPassword)
-                .role("USER")
+                .role(request.getRole())
                 .build();
         userRepo.save(user);
 
@@ -74,7 +74,8 @@ public class AuthController {
         // 4. Create HttpOnly Cookie
         ResponseCookie cookie = ResponseCookie.from("accessToken", token)
                 .httpOnly(true)
-                .secure(false) // Set to TRUE in production with HTTPS
+                .secure(true)
+                .sameSite("None")
                 .path("/")
                 .maxAge(24 * 60 * 60)
                 .build();

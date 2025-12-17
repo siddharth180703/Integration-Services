@@ -3,6 +3,9 @@ package com.example.demo.Security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -16,53 +19,84 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @Configuration
+@EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final CustomAuthEntryPoint authEntryPoint;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
+
                 .csrf(csrf -> csrf.disable())
-                // 1. Enable CORS
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                // Enable CORS
+                .cors(Customizer.withDefaults())
+
+                // No sessions
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
+
+                // Authorization rules
                 .authorizeHttpRequests(auth -> auth
+                        // auth endpoints
                         .requestMatchers("/auth/**").permitAll()
-                        .anyRequest().authenticated()
+
+                        // mapping schemas (GET allowed for authenticated users)
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/mapping-schemas/**"
+                        ).authenticated()
+
+                        // all other APIs need authentication
+                        .requestMatchers("/api/**").authenticated()
+
+                        // everything else allowed
+                        .anyRequest().permitAll()
                 )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+                // 401 / 403 handling
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(authEntryPoint)   // 401
+                        .accessDeniedHandler(accessDeniedHandler)   // 403
+                )
+
+                // JWT filter
+                .addFilterBefore(
+                        jwtAuthFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-
-        // 2. Allow your Frontend URL (Adjust port if different, e.g., 3000, 5173)
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
-
-        // 3. Allow standard methods
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-
-        // 4. Allow Headers (Authorization and Content-Type are crucial)
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-
-        // 5. Allow Cookies (ESSENTIAL for your implementation)
-        configuration.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
-
+    // 🔐 Password encoder
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    // CORS configuration (REQUIRED for cookies)
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+        ));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+
+        return source;
     }
 }
